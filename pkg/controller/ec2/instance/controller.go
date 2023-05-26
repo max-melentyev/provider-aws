@@ -246,22 +246,31 @@ func (e *external) Create(ctx context.Context, mgd resource.Managed) (managed.Ex
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
 	}
 
-	result, err := e.client.RunInstances(ctx,
-		ec2.GenerateEC2RunInstancesInput(mgd.GetName(), &cr.Spec.ForProvider),
-	)
+	input := ec2.GenerateEC2RunInstancesInput(mgd.GetName(), &cr.Spec.ForProvider)
+
+	// Append tags to any existing `TagSpecification` for the instance, otherwise
+	// append it as a new `TagSpecification` for the instance.
+	existing := false
+	for _, t := range input.TagSpecifications {
+		if t.ResourceType == types.ResourceTypeInstance {
+			existing = true
+			t.Tags = append(t.Tags, ec2.GenerateEC2TagsManualV1alpha1(cr.Spec.ForProvider.Tags)...)
+			break
+		}
+	}
+	if !existing {
+		input.TagSpecifications = append(input.TagSpecifications, types.TagSpecification{
+			ResourceType: types.ResourceTypeInstance,
+			Tags:         ec2.GenerateEC2TagsManualV1alpha1(cr.Spec.ForProvider.Tags),
+		})
+	}
+
+	result, err := e.client.RunInstances(ctx, input)
 	if err != nil {
 		return managed.ExternalCreation{}, errorutils.Wrap(err, errCreate)
 	}
 
 	instance := result.Instances[0]
-
-	if _, err := e.client.CreateTags(ctx, &awsec2.CreateTagsInput{
-		Resources: []string{pointer.StringValue(instance.InstanceId)},
-		Tags:      ec2.GenerateEC2TagsManualV1alpha1(cr.Spec.ForProvider.Tags),
-	}); err != nil {
-		return managed.ExternalCreation{}, errorutils.Wrap(err, errCreateTags)
-	}
-
 	meta.SetExternalName(cr, pointer.StringValue(instance.InstanceId))
 
 	return managed.ExternalCreation{}, nil
