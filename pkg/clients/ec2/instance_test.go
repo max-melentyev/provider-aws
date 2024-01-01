@@ -84,6 +84,9 @@ const (
 	userData              = "userData"
 	volumeID              = "volId"
 	volumeType            = "gp2"
+
+	// reddit patch:
+	instanceInitiatedShutdownBehavior = "stop"
 )
 
 func TestGenerateInstanceConditions(t *testing.T) {
@@ -195,8 +198,9 @@ func TestGenerateDescribeInstancesByExternalTags(t *testing.T) {
 
 func TestGenerateInstanceObservation(t *testing.T) {
 	cases := map[string]struct {
-		in  types.Instance
-		out manualv1alpha1.InstanceObservation
+		in         types.Instance
+		attributes ec2.DescribeInstanceAttributeOutput
+		out        manualv1alpha1.InstanceObservation
 	}{
 		"AllFilled": {
 			in: types.Instance{
@@ -368,6 +372,13 @@ func TestGenerateInstanceObservation(t *testing.T) {
 				VirtualizationType: types.VirtualizationTypeHvm,
 				VpcId:              aws.String(vpcID),
 			},
+			attributes: ec2.DescribeInstanceAttributeOutput{
+				DisableApiTermination:             &types.AttributeBooleanValue{Value: aws.Bool(true)},
+				InstanceInitiatedShutdownBehavior: &types.AttributeValue{Value: aws.String(instanceInitiatedShutdownBehavior)},
+				KernelId:                          &types.AttributeValue{Value: aws.String(kernelID)},
+				RamdiskId:                         &types.AttributeValue{Value: aws.String(ramDiskID)},
+				UserData:                          &types.AttributeValue{Value: aws.String(userData)},
+			},
 			out: manualv1alpha1.InstanceObservation{
 				AmiLaunchIndex: aws.Int32(0),
 				Architecture:   arch,
@@ -394,8 +405,9 @@ func TestGenerateInstanceObservation(t *testing.T) {
 					CoreCount:      aws.Int32(1),
 					ThreadsPerCore: aws.Int32(1),
 				},
-				EBSOptimized: aws.Bool(false),
-				EnaSupport:   aws.Bool(false),
+				DisableAPITermination: aws.Bool(true),
+				EBSOptimized:          aws.Bool(false),
+				EnaSupport:            aws.Bool(false),
 				ElasticGPUAssociations: []manualv1alpha1.ElasticGPUAssociation{
 					{
 						ElasticGPUAssociationID:    aws.String(assocID),
@@ -420,11 +432,12 @@ func TestGenerateInstanceObservation(t *testing.T) {
 					ARN: aws.String(iamARN),
 					ID:  aws.String(iamID),
 				},
-				ImageID:           aws.String(imageID),
-				InstanceID:        aws.String(instanceID),
-				InstanceLifecycle: string(types.InstanceLifecycleTypeScheduled),
-				InstanceType:      string(types.InstanceTypeM1Small),
-				KernelID:          aws.String(kernelID),
+				ImageID:                           aws.String(imageID),
+				InstanceID:                        aws.String(instanceID),
+				InstanceInitiatedShutdownBehavior: aws.String("stop"),
+				InstanceLifecycle:                 string(types.InstanceLifecycleTypeScheduled),
+				InstanceType:                      string(types.InstanceTypeM1Small),
+				KernelID:                          aws.String(kernelID),
 				Licenses: []manualv1alpha1.LicenseConfigurationRequest{
 					{
 						LicenseConfigurationARN: aws.String(licenseConfig),
@@ -530,6 +543,7 @@ func TestGenerateInstanceObservation(t *testing.T) {
 						Value: tagsVal,
 					},
 				},
+				UserData:           aws.String(userData),
 				VirtualizationType: string(types.VirtualizationTypeHvm),
 				VPCID:              aws.String(vpcID),
 			},
@@ -538,7 +552,7 @@ func TestGenerateInstanceObservation(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r := GenerateInstanceObservation(tc.in)
+			r := GenerateInstanceObservation(tc.in, &tc.attributes)
 			if diff := cmp.Diff(tc.out, r); diff != "" {
 				t.Errorf("GenerateInstanceObservation(...): -want, +got:\n%s", diff)
 			}

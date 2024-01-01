@@ -31,6 +31,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -211,7 +212,7 @@ func (e *external) Observe(ctx context.Context, mgd resource.Managed) (managed.E
 		}
 	}
 
-	observation := ec2.GenerateInstanceObservation(observed)
+	observation := ec2.GenerateInstanceObservation(observed, &o)
 	condition := ec2.GenerateInstanceCondition(observation)
 
 	switch condition {
@@ -282,7 +283,7 @@ func (e *external) Update(ctx context.Context, mgd resource.Managed) (managed.Ex
 		return managed.ExternalUpdate{}, errors.New(errUnexpectedObject)
 	}
 
-	if cr.Spec.ForProvider.DisableAPITermination != nil {
+	if !ptr.Equal(cr.Spec.ForProvider.DisableAPITermination, cr.Status.AtProvider.DisableAPITermination) {
 		modifyInput := &awsec2.ModifyInstanceAttributeInput{
 			InstanceId: aws.String(meta.GetExternalName(cr)),
 			DisableApiTermination: &types.AttributeBooleanValue{
@@ -296,7 +297,7 @@ func (e *external) Update(ctx context.Context, mgd resource.Managed) (managed.Ex
 		}
 	}
 
-	if cr.Spec.ForProvider.InstanceInitiatedShutdownBehavior != "" {
+	if cr.Spec.ForProvider.InstanceInitiatedShutdownBehavior != pointer.StringValue(cr.Status.AtProvider.InstanceInitiatedShutdownBehavior) {
 		modifyInput := &awsec2.ModifyInstanceAttributeInput{
 			InstanceId: aws.String(meta.GetExternalName(cr)),
 			InstanceInitiatedShutdownBehavior: &types.AttributeValue{
@@ -310,7 +311,7 @@ func (e *external) Update(ctx context.Context, mgd resource.Managed) (managed.Ex
 		}
 	}
 
-	if cr.Spec.ForProvider.KernelID != nil {
+	if !ptr.Equal(cr.Spec.ForProvider.KernelID, cr.Status.AtProvider.KernelID) {
 		modifyInput := &awsec2.ModifyInstanceAttributeInput{
 			InstanceId: aws.String(meta.GetExternalName(cr)),
 			Kernel: &types.AttributeValue{
@@ -324,7 +325,7 @@ func (e *external) Update(ctx context.Context, mgd resource.Managed) (managed.Ex
 		}
 	}
 
-	if cr.Spec.ForProvider.RAMDiskID != nil {
+	if !ptr.Equal(cr.Spec.ForProvider.RAMDiskID, cr.Status.AtProvider.RAMDiskID) {
 		modifyInput := &awsec2.ModifyInstanceAttributeInput{
 			InstanceId: aws.String(meta.GetExternalName(cr)),
 			Ramdisk: &types.AttributeValue{
@@ -338,7 +339,7 @@ func (e *external) Update(ctx context.Context, mgd resource.Managed) (managed.Ex
 		}
 	}
 
-	if cr.Spec.ForProvider.UserData != nil {
+	if !ptr.Equal(cr.Spec.ForProvider.UserData, cr.Status.AtProvider.UserData) {
 		modifyInput := &awsec2.ModifyInstanceAttributeInput{
 			InstanceId: aws.String(meta.GetExternalName(cr)),
 			UserData: &types.BlobAttributeValue{
