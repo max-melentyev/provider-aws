@@ -1,5 +1,35 @@
 # provider-aws
 
+## Reddit patches
+
+- Increase route53.ResourceRecordSet polling interval
+- Pass Spec.Tags in TagSpecifications when creating ec2.Instance and ec2.SecurityGroup
+- Trigger reconciliation when ec2.Instance tags are changed
+- Change Update logic for ec2.Instance
+
+### Publishing new build
+
+```
+# for test builds
+repo=artifactory.build.ue1.snooguts.net/reddit-docker-dev-local
+version=v%upstream_version%-%name%
+# example: v0.46.1-johndoe
+
+# for staging builds
+repo=artifactory.build.ue1.snooguts.net/reddit-docker-dev
+version=v%upstream_version%-reddit.%reddit_version%
+# example: v0.46.1-reddit.2
+
+# for prod builds
+repo=artifactory.build.ue1.snooguts.net/reddit-docker-dev
+version=v%upstream_version%-reddit.%reddit_version%
+# example: v0.46.1-reddit.2
+# TODO: add a drone pipeline and use reddit-docker-prod for prod builds
+
+make submodules
+make build publish.artifacts PLATFORM=linux_amd64 XPKG_REG_ORGS=$repo/achilles/crossplane VERSION=$version
+```
+
 ## Overview
 
 This `provider-aws` repository is the Crossplane infrastructure provider for
