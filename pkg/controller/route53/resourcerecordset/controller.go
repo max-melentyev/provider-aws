@@ -72,6 +72,7 @@ func SetupResourceRecordSet(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithConnectionPublishers(),
 		// managed.WithPollInterval(o.PollInterval),
 		managed.WithPollInterval(route53PollInterval),
+		managed.WithPollJitterHook(route53PollInterval / 2),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
