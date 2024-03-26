@@ -224,12 +224,12 @@ func LateInitializeInstance(in *manualv1alpha1.InstanceParameters, instance *typ
 		in.InstanceInitiatedShutdownBehavior = pointer.LateInitializeValueFromPtr(in.InstanceInitiatedShutdownBehavior, attributes.InstanceInitiatedShutdownBehavior.Value)
 	}
 
-	if attributes.UserData != nil {
-		in.UserData = pointer.LateInitialize(in.UserData, attributes.UserData.Value)
-	}
-
 	if in.InstanceType == "" {
 		in.InstanceType = string(instance.InstanceType)
+	}
+
+	if attributes.UserData != nil {
+		in.UserData = pointer.LateInitialize(in.UserData, attributes.UserData.Value)
 	}
 
 	in.EBSOptimized = pointer.LateInitialize(in.EBSOptimized, instance.EbsOptimized)
