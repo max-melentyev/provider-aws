@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -30,17 +31,20 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/alecthomas/kingpin.v2"
+	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/crossplane-contrib/provider-aws/apis"
 	"github.com/crossplane-contrib/provider-aws/apis/v1alpha1"
 	"github.com/crossplane-contrib/provider-aws/pkg/controller"
 	"github.com/crossplane-contrib/provider-aws/pkg/features"
+	utilscontroller "github.com/crossplane-contrib/provider-aws/pkg/utils/controller"
 	"github.com/crossplane-contrib/provider-aws/pkg/utils/metrics"
 )
 
@@ -52,6 +56,7 @@ func main() {
 		pollInterval     = app.Flag("poll", "Poll interval controls how often an individual resource should be checked for drift.").Default("1m").Duration()
 		leaderElection   = app.Flag("leader-election", "Use leader election for the conroller manager.").Short('l').Default("false").OverrideDefaultFromEnvar("LEADER_ELECTION").Bool()
 		maxReconcileRate = app.Flag("max-reconcile-rate", "The global maximum rate per second at which resources may checked for drift from the desired state.").Default("10").Int()
+		configMapName    = app.Flag("config-map", "Name of the ConfigMap that contains provider overrides.").Default("").String()
 
 		namespace                  = app.Flag("namespace", "Namespace used to set as default scope in default secret store config.").Default("crossplane-system").Envar("POD_NAMESPACE").String()
 		enableExternalSecretStores = app.Flag("enable-external-secret-stores", "Enable support for ExternalSecretStores.").Default("false").Envar("ENABLE_EXTERNAL_SECRET_STORES").Bool()
@@ -126,8 +131,18 @@ func main() {
 		log.Info("Alpha feature enabled", "flag", features.EnableAlphaManagementPolicies)
 	}
 
+	optionsWithOverrides := utilscontroller.NewOptions(o)
+	if *configMapName != "" {
+		configMap := v1.ConfigMap{}
+		kingpin.FatalIfError(
+			mgr.GetCache().Get(context.Background(), parseNamespacedName(*configMapName), &configMap),
+			"Cannot fetch overrides from ConfigMap",
+		)
+		kingpin.FatalIfError(optionsWithOverrides.AddOverrides(configMap.Data), "Cannot add overrides")
+	}
+
 	kingpin.FatalIfError(metrics.SetupMetrics(), "Cannot setup AWS metrics hook")
-	kingpin.FatalIfError(controller.Setup(mgr, o), "Cannot setup AWS controllers")
+	kingpin.FatalIfError(controller.Setup(mgr, optionsWithOverrides), "Cannot setup AWS controllers")
 	kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
 
 }
@@ -136,5 +151,14 @@ func main() {
 func UseISO8601() zap.Opts {
 	return func(o *zap.Options) {
 		o.TimeEncoder = zapcore.ISO8601TimeEncoder
+	}
+}
+
+func parseNamespacedName(name string) client.ObjectKey {
+	parts := strings.Split(name, "/")
+	if len(parts) == 2 {
+		return client.ObjectKey{Namespace: parts[0], Name: parts[1]}
+	} else {
+		return client.ObjectKey{Name: name}
 	}
 }

@@ -19,7 +19,6 @@ package instance
 import (
 	"context"
 	"sync/atomic"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -58,8 +57,6 @@ const (
 	errModifyInstanceAttributes = "failed to modify the Instance resource attributes"
 	errCreateTags               = "failed to create tags for the Instance resource"
 	errDelete                   = "failed to delete the Instance resource"
-
-	instancePollInterval = 5 * time.Minute
 )
 
 // SetupInstance adds a controller that reconciles Instances.
@@ -77,8 +74,8 @@ func SetupInstance(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithReferenceResolver(managed.NewAPISimpleReferenceResolver(mgr.GetClient())),
 		managed.WithConnectionPublishers(),
 		managed.WithInitializers(),
-		managed.WithPollInterval(instancePollInterval),
-		managed.WithPollJitterHook(instancePollInterval / 2),
+		managed.WithPollInterval(o.PollInterval),
+		managed.WithPollJitterHook(o.PollInterval / 2),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),

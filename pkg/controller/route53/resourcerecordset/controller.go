@@ -18,7 +18,6 @@ package resourcerecordset
 
 import (
 	"context"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	route53types "github.com/aws/aws-sdk-go-v2/service/route53/types"
@@ -51,9 +50,6 @@ const (
 	errUpdate           = "failed to update the ResourceRecordSet resource"
 	errDelete           = "failed to delete the ResourceRecordSet resource"
 	errState            = "failed to determine resource state"
-
-	// Override the route53 poll interval to be 30 minutes due to the strict 5 req/second/account API limit.
-	route53PollInterval = 30 * time.Minute
 )
 
 // SetupResourceRecordSet adds a controller that reconciles ResourceRecordSets.
@@ -70,9 +66,8 @@ func SetupResourceRecordSet(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{kube: mgr.GetClient(), newClientFn: resourcerecordset.NewClient}),
 		managed.WithReferenceResolver(managed.NewAPISimpleReferenceResolver(mgr.GetClient())),
 		managed.WithConnectionPublishers(),
-		// managed.WithPollInterval(o.PollInterval),
-		managed.WithPollInterval(route53PollInterval),
-		managed.WithPollJitterHook(route53PollInterval / 2),
+		managed.WithPollInterval(o.PollInterval),
+		managed.WithPollJitterHook(o.PollInterval / 2),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
