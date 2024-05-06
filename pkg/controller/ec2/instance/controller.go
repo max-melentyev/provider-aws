@@ -24,7 +24,6 @@ import (
 	types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -35,12 +34,14 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	svcapitypes "github.com/crossplane-contrib/provider-aws/apis/ec2/manualv1alpha1"
 	"github.com/crossplane-contrib/provider-aws/apis/v1alpha1"
 	"github.com/crossplane-contrib/provider-aws/pkg/clients/ec2"
 	"github.com/crossplane-contrib/provider-aws/pkg/features"
 	connectaws "github.com/crossplane-contrib/provider-aws/pkg/utils/connect/aws"
+	"github.com/crossplane-contrib/provider-aws/pkg/utils/controller"
 	errorutils "github.com/crossplane-contrib/provider-aws/pkg/utils/errors"
 	"github.com/crossplane-contrib/provider-aws/pkg/utils/pointer"
 	custommanaged "github.com/crossplane-contrib/provider-aws/pkg/utils/reconciler/managed"
@@ -80,6 +81,10 @@ func SetupInstance(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithConnectionPublishers(cps...),
 	}
 
+	if o.PollIntervalJitter != 0 {
+		reconcilerOpts = append(reconcilerOpts, managed.WithPollJitterHook(o.PollIntervalJitter))
+	}
+
 	if o.Features.Enabled(features.EnableAlphaManagementPolicies) {
 		reconcilerOpts = append(reconcilerOpts, managed.WithManagementPolicies())
 	}
@@ -88,12 +93,17 @@ func SetupInstance(mgr ctrl.Manager, o controller.Options) error {
 		resource.ManagedKind(svcapitypes.InstanceGroupVersionKind),
 		reconcilerOpts...)
 
-	return ctrl.NewControllerManagedBy(mgr).
+	bldr := ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
 		WithEventFilter(resource.DesiredStateChanged()).
-		For(&svcapitypes.Instance{}).
-		Complete(r)
+		For(&svcapitypes.Instance{})
+
+	if o.Monitor != nil {
+		bldr = bldr.WatchesRawSource(eventsFromMonitor(mgr, o.Monitor), &handler.EnqueueRequestForObject{})
+	}
+
+	return bldr.Complete(r)
 }
 
 type connector struct {
@@ -256,9 +266,26 @@ func (e *external) Create(ctx context.Context, mgd resource.Managed) (managed.Ex
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
 	}
 
-	result, err := e.client.RunInstances(ctx,
-		ec2.GenerateEC2RunInstancesInput(mgd.GetName(), &cr.Spec.ForProvider),
-	)
+	input := ec2.GenerateEC2RunInstancesInput(mgd.GetName(), &cr.Spec.ForProvider)
+
+	// Append tags to any existing `TagSpecification` for the instance, otherwise
+	// append it as a new `TagSpecification` for the instance.
+	existing := false
+	for _, t := range input.TagSpecifications {
+		if t.ResourceType == types.ResourceTypeInstance {
+			existing = true
+			t.Tags = append(t.Tags, ec2.GenerateEC2TagsManualV1alpha1(cr.Spec.ForProvider.Tags)...)
+			break
+		}
+	}
+	if !existing {
+		input.TagSpecifications = append(input.TagSpecifications, types.TagSpecification{
+			ResourceType: types.ResourceTypeInstance,
+			Tags:         ec2.GenerateEC2TagsManualV1alpha1(cr.Spec.ForProvider.Tags),
+		})
+	}
+
+	result, err := e.client.RunInstances(ctx, input)
 	if err != nil {
 		return managed.ExternalCreation{}, errorutils.Wrap(err, errCreate)
 	}
