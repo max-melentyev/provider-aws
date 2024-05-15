@@ -22,16 +22,10 @@ version=v%upstream_version%-reddit.%reddit_version%
 # TODO: add a drone pipeline and use reddit-docker-prod for prod builds
 
 make submodules
-make build publish.artifacts PLATFORM=linux_amd64 XPKG_REG_ORGS=$repo/achilles/crossplane VERSION=$version
+make build publish.artifacts PLATFORMS=linux_amd64 PLATFORM=linux_amd64 \
+  XPKG_REG_ORGS=$repo/achilles/crossplane VERSION=$version
 
-# If you get error `.../linux_arm64/provider-aws-....xpkg: no such file or directory`
-# update Makefile:
--PLATFORMS ?= linux_amd64 linux_arm64
-+PLATFORMS ?= linux_amd64
-# TODO: should we add this to the repo if the issue is not released in the next release?
-
-git tag $version
-git push $version
+# Draft new release at https://github.snooguts.net/reddit/provider-aws/releases/new
 ```
 
 ## Overview
