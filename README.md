@@ -1,4 +1,5 @@
 # provider-aws
+[![Reticle Badge](https://reticle.snooguts.net/api/reticle_badge?repo_name=reddit/provider-aws)](https://reticle.snooguts.net/repos/reddit/provider-aws)
 
 ## Reddit patches
 
