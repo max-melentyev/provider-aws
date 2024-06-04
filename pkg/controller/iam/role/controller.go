@@ -53,6 +53,10 @@ const (
 
 	errKubeUpdateFailed = "cannot late initialize Role"
 	errUpToDateFailed   = "cannot check whether object is up-to-date"
+
+	// Set it to not update Status.AtProvider.LastUsedAt.
+	// Useful to not trigger reconciliation of owner resources.
+	ANNOTATION_IGNORE_LAST_USED_AT = "roles.iam.crossplane.io/ignore-last-used-at"
 )
 
 // SetupRole adds a controller that reconciles Roles.
@@ -140,6 +144,9 @@ func (e *external) Observe(ctx context.Context, mgd resource.Managed) (managed.E
 	cr.SetConditions(xpv1.Available())
 
 	cr.Status.AtProvider = iam.GenerateRoleObservation(*observed.Role)
+	if cr.Annotations[ANNOTATION_IGNORE_LAST_USED_AT] != "" {
+		cr.Status.AtProvider.RoleLastUsed = nil
+	}
 
 	upToDate, diff, err := iam.IsRoleUpToDate(cr.Spec.ForProvider, role)
 	if err != nil {
