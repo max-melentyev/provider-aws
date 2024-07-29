@@ -29,6 +29,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -85,9 +87,16 @@ func SetupResourceRecordSet(mgr ctrl.Manager, o controller.Options) error {
 		resource.ManagedKind(route53v1alpha1.ResourceRecordSetGroupVersionKind),
 		reconcilerOpts...)
 
+	managerOptions := o.ForControllerRuntime()
+	managerOptions.RateLimiter = workqueue.NewMaxOfRateLimiter(
+		managerOptions.RateLimiter,
+		// Route53 API has strict limit of 5 rps
+		&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(5), 5)},
+	)
+
 	bldr := ctrl.NewControllerManagedBy(mgr).
 		Named(name).
-		WithOptions(o.ForControllerRuntime()).
+		WithOptions(managerOptions).
 		WithEventFilter(resource.DesiredStateChanged()).
 		For(&route53v1alpha1.ResourceRecordSet{})
 
