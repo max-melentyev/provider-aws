@@ -23,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 
 	ec2manualv1alpha1 "github.com/crossplane-contrib/provider-aws/apis/ec2/manualv1alpha1"
+	ec2v1alpha1 "github.com/crossplane-contrib/provider-aws/apis/ec2/v1alpha1"
 	route53v1alpha1 "github.com/crossplane-contrib/provider-aws/apis/route53/v1alpha1"
 	"github.com/crossplane-contrib/provider-aws/pkg/monitor"
 )
@@ -53,13 +54,21 @@ func eventsFromMessage(msg map[string]any) []monitor.Event { //nolint:gocyclo
 		return events
 	}
 
+	msgDetail := dig(msg, "detail")
+	msgRequestParameters := dig(msgDetail, "requestParameters")
+
 	// EC2 API call that supports different resource types, like tagging
-	if resourcesSet, ok := dig(msg, "detail", "requestParameters", "resourcesSet", "items").([]any); ok {
+	if resourcesSet, ok := dig(msgRequestParameters, "resourcesSet", "items").([]any); ok {
 		for _, item := range resourcesSet {
 			if resourceId, ok := dig(item, "resourceId").(string); ok {
 				if strings.HasPrefix(resourceId, "i-") {
 					events = append(events, monitor.Event{
 						GVK:          ec2manualv1alpha1.InstanceGroupVersionKind,
+						ExternalName: resourceId,
+					})
+				} else if strings.HasPrefix(resourceId, "vol-") {
+					events = append(events, monitor.Event{
+						GVK:          ec2v1alpha1.VolumeGroupVersionKind,
 						ExternalName: resourceId,
 					})
 				}
@@ -68,7 +77,7 @@ func eventsFromMessage(msg map[string]any) []monitor.Event { //nolint:gocyclo
 	}
 
 	// EC2 API call for multiple instances
-	if instancesSet, ok := dig(msg, "detail", "requestParameters", "instancesSet", "items").([]any); ok {
+	if instancesSet, ok := dig(msgRequestParameters, "instancesSet", "items").([]any); ok {
 		for _, item := range instancesSet {
 			if instanceId, ok := dig(item, "instanceId").(string); ok {
 				events = append(events, monitor.Event{
@@ -80,7 +89,7 @@ func eventsFromMessage(msg map[string]any) []monitor.Event { //nolint:gocyclo
 	}
 
 	// EC2 API call for a single instance
-	if instanceId, ok := dig(msg, "detail", "requestParameters", "instanceId").(string); ok {
+	if instanceId, ok := dig(msgRequestParameters, "instanceId").(string); ok {
 		events = append(events, monitor.Event{
 			GVK:          ec2manualv1alpha1.InstanceGroupVersionKind,
 			ExternalName: instanceId,
@@ -88,15 +97,31 @@ func eventsFromMessage(msg map[string]any) []monitor.Event { //nolint:gocyclo
 	}
 
 	// EC2 Instance State-change Notification
-	if instanceId, ok := dig(msg, "detail", "instance-id").(string); ok {
+	if instanceId, ok := dig(msgDetail, "instance-id").(string); ok {
 		events = append(events, monitor.Event{
 			GVK:          ec2manualv1alpha1.InstanceGroupVersionKind,
 			ExternalName: instanceId,
 		})
 	}
 
+	// EC2 API call for a single volume
+	if volumeId, ok := dig(msgRequestParameters, "volumeId").(string); ok {
+		events = append(events, monitor.Event{
+			GVK:          ec2v1alpha1.VolumeGroupVersionKind,
+			ExternalName: volumeId,
+		})
+	}
+
+	// ModifyVolumeRequest has a different structure
+	if volumeId, ok := dig(msgRequestParameters, "ModifyVolumeRequest", "VolumeId").(string); ok {
+		events = append(events, monitor.Event{
+			GVK:          ec2v1alpha1.VolumeGroupVersionKind,
+			ExternalName: volumeId,
+		})
+	}
+
 	// Route53 API call
-	if changes, ok := dig(msg, "detail", "requestParameters", "changeBatch", "changes").([]any); ok {
+	if changes, ok := dig(msgRequestParameters, "changeBatch", "changes").([]any); ok {
 		for _, item := range changes {
 			if name, ok := dig(item, "resourceRecordSet", "name").(string); ok {
 				events = append(events, monitor.Event{
@@ -137,10 +162,17 @@ func eventFromARN(arn string) monitor.Event {
 	resourceType := resourceParts[0]
 	name := resourceParts[1]
 
-	if service == "ec2" && resourceType == "instance" {
-		return monitor.Event{
-			GVK:          ec2manualv1alpha1.InstanceGroupVersionKind,
-			ExternalName: name,
+	if service == "ec2" {
+		if resourceType == "instance" {
+			return monitor.Event{
+				GVK:          ec2manualv1alpha1.InstanceGroupVersionKind,
+				ExternalName: name,
+			}
+		} else if resourceType == "volume" {
+			return monitor.Event{
+				GVK:          ec2v1alpha1.VolumeGroupVersionKind,
+				ExternalName: name,
+			}
 		}
 	} else if service == "route53" && resourceType == "resourceRecordSet" {
 		return monitor.Event{

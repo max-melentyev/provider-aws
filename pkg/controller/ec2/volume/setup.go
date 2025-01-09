@@ -19,16 +19,17 @@ import (
 	svcsdk "github.com/aws/aws-sdk-go/service/ec2"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	svcapitypes "github.com/crossplane-contrib/provider-aws/apis/ec2/v1alpha1"
 	"github.com/crossplane-contrib/provider-aws/apis/v1alpha1"
 	"github.com/crossplane-contrib/provider-aws/pkg/features"
+	"github.com/crossplane-contrib/provider-aws/pkg/utils/controller"
 	"github.com/crossplane-contrib/provider-aws/pkg/utils/pointer"
 	custommanaged "github.com/crossplane-contrib/provider-aws/pkg/utils/reconciler/managed"
 )
@@ -68,12 +69,17 @@ func SetupVolume(mgr ctrl.Manager, o controller.Options) error {
 		resource.ManagedKind(svcapitypes.VolumeGroupVersionKind),
 		reconcilerOpts...)
 
-	return ctrl.NewControllerManagedBy(mgr).
+	bldr := ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
 		WithEventFilter(resource.DesiredStateChanged()).
-		For(&svcapitypes.Volume{}).
-		Complete(r)
+		For(&svcapitypes.Volume{})
+
+	if o.Monitor != nil {
+		bldr = bldr.WatchesRawSource(eventsFromMonitor(mgr, o.Monitor), &handler.EnqueueRequestForObject{})
+	}
+
+	return bldr.Complete(r)
 }
 
 func filterList(cr *svcapitypes.Volume, obj *svcsdk.DescribeVolumesOutput) *svcsdk.DescribeVolumesOutput {

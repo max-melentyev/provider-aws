@@ -8,13 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ec2manualv1alpha1 "github.com/crossplane-contrib/provider-aws/apis/ec2/manualv1alpha1"
+	ec2v1alpha1 "github.com/crossplane-contrib/provider-aws/apis/ec2/v1alpha1"
 	route53v1alpha1 "github.com/crossplane-contrib/provider-aws/apis/route53/v1alpha1"
 	"github.com/crossplane-contrib/provider-aws/pkg/monitor"
 )
 
 type j = map[string]any
 
-func Test_EventMessage_events(t *testing.T) {
+func Test_EventMessage_parse_and_dig(t *testing.T) {
 	jsonStr := `{
 		"version": "0",
 		"detail": {
@@ -120,6 +121,7 @@ func Test_eventsFromMessage_ec2ApiCall(t *testing.T) {
 				"resourcesSet": {
 					"items": [
 						{"resourceId": "i-1234"},
+						{"resourceId": "vol-2345"},
 						{"resourceId": "sg-5678"}
 					]
 				}
@@ -130,6 +132,10 @@ func Test_eventsFromMessage_ec2ApiCall(t *testing.T) {
 		{
 			GVK:          ec2manualv1alpha1.InstanceGroupVersionKind,
 			ExternalName: "i-1234",
+		},
+		{
+			GVK:          ec2v1alpha1.VolumeGroupVersionKind,
+			ExternalName: "vol-2345",
 		},
 	}, events)
 }
@@ -145,8 +151,48 @@ func Test_eventsFromMessage_ebsNotification(t *testing.T) {
 	}`)
 	assert.Equal(t, []monitor.Event{
 		{
+			GVK:          ec2v1alpha1.VolumeGroupVersionKind,
+			ExternalName: "vol-01234567",
+		},
+		{
 			GVK:          ec2manualv1alpha1.InstanceGroupVersionKind,
 			ExternalName: "i-1234",
+		},
+	}, events)
+}
+
+func Test_eventsFromMessage_volumeApiCall(t *testing.T) {
+	events := eventsFromJson(t, `{
+		"detail-type": "AWS API Call via CloudTrail",
+		"detail": {
+			"requestParameters": {
+				"volumeId": "vol-1234"
+			}
+		}
+	}`)
+	assert.Equal(t, []monitor.Event{
+		{
+			GVK:          ec2v1alpha1.VolumeGroupVersionKind,
+			ExternalName: "vol-1234",
+		},
+	}, events)
+}
+
+func Test_eventsFromMessage_ModifyVolumeRequest(t *testing.T) {
+	events := eventsFromJson(t, `{
+		"detail-type": "AWS API Call via CloudTrail",
+		"detail": {
+			"requestParameters": {
+				"ModifyVolumeRequest": {
+					"VolumeId": "vol-1234"
+				}
+			}
+		}
+	}`)
+	assert.Equal(t, []monitor.Event{
+		{
+			GVK:          ec2v1alpha1.VolumeGroupVersionKind,
+			ExternalName: "vol-1234",
 		},
 	}, events)
 }

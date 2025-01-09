@@ -64,7 +64,7 @@ func Setup(mgr ctrl.Manager, o controller.OptionsSet) error {
 	batch.AddXp("transitgatewayroute", transitgatewayroute.SetupTransitGatewayRoute)
 	batch.AddXp("transitgatewayroutetable", transitgatewayroutetable.SetupTransitGatewayRouteTable)
 	batch.AddXp("transitgatewayvpcattachment", transitgatewayvpcattachment.SetupTransitGatewayVPCAttachment)
-	batch.AddXp("volume", volume.SetupVolume)
+	batch.Add("volume", volume.SetupVolume)
 	batch.AddXp("vpc", vpc.SetupVPC)
 	batch.AddXp("vpccidrblock", vpccidrblock.SetupVPCCIDRBlock)
 	batch.AddXp("vpcendpoint", vpcendpoint.SetupVPCEndpoint)
