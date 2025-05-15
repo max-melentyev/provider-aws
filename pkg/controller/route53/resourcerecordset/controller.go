@@ -90,8 +90,10 @@ func SetupResourceRecordSet(mgr ctrl.Manager, o controller.Options) error {
 	managerOptions := o.ForControllerRuntime()
 	managerOptions.RateLimiter = workqueue.NewMaxOfRateLimiter(
 		managerOptions.RateLimiter,
-		// Route53 API has strict limit of 5 rps
-		&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(5), 5)},
+		// Route53 API has strict limit of 5 rps, we ensure that this controller only consumes
+		// 80% of the API limit to allow other non-controller managed operations to continue
+		// to work.
+		&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(4), 4)},
 	)
 
 	bldr := ctrl.NewControllerManagedBy(mgr).
