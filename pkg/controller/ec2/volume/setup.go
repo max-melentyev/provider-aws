@@ -61,6 +61,10 @@ func SetupVolume(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithConnectionPublishers(cps...),
 	}
 
+	if o.PollIntervalJitter != 0 {
+		reconcilerOpts = append(reconcilerOpts, managed.WithPollJitterHook(o.PollIntervalJitter))
+	}
+
 	if o.Features.Enabled(features.EnableAlphaManagementPolicies) {
 		reconcilerOpts = append(reconcilerOpts, managed.WithManagementPolicies())
 	}
