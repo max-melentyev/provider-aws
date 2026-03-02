@@ -584,3 +584,72 @@ func TestIsUpToDate(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateRestoreDBClusterToPointInTimeInput(t *testing.T) {
+	type args struct {
+		cr *svcapitypes.DBCluster
+	}
+
+	type want struct {
+		restoreType *string
+	}
+
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"RestoreTypeWithCopyOnWrite": {
+			args: args{
+				cr: &svcapitypes.DBCluster{
+					Spec: svcapitypes.DBClusterSpec{
+						ForProvider: svcapitypes.DBClusterParameters{
+							CustomDBClusterParameters: svcapitypes.CustomDBClusterParameters{
+								RestoreFrom: &svcapitypes.RestoreDBClusterBackupConfiguration{
+									Source: ptr.To("PointInTime"),
+									PointInTime: &svcapitypes.PointInTimeRestoreDBClusterBackupConfiguration{
+										RestoreType:             ptr.To("copy-on-write"),
+										UseLatestRestorableTime: true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				restoreType: ptr.To("copy-on-write"),
+			},
+		},
+		"RestoreTypeNil": {
+			args: args{
+				cr: &svcapitypes.DBCluster{
+					Spec: svcapitypes.DBClusterSpec{
+						ForProvider: svcapitypes.DBClusterParameters{
+							CustomDBClusterParameters: svcapitypes.CustomDBClusterParameters{
+								RestoreFrom: &svcapitypes.RestoreDBClusterBackupConfiguration{
+									Source: ptr.To("PointInTime"),
+									PointInTime: &svcapitypes.PointInTimeRestoreDBClusterBackupConfiguration{
+										UseLatestRestorableTime: true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				restoreType: nil,
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result := generateRestoreDBClusterToPointInTimeInput(tc.args.cr)
+
+			if diff := cmp.Diff(tc.want.restoreType, result.RestoreType); diff != "" {
+				t.Errorf("r: -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
