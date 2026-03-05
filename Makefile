@@ -45,7 +45,7 @@ GOLANGCILINT_VERSION = 1.54.2
 # ====================================================================================
 # Setup Kubernetes tools
 
-UP_VERSION = v0.27.0
+UP_VERSION = v0.35.0
 UP_CHANNEL = stable
 UPTEST_VERSION = v0.11.0
 
