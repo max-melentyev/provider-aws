@@ -1822,6 +1822,11 @@ func (in *VPCParameters) DeepCopyInto(out *VPCParameters) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.Ipv6IpamPoolID != nil {
+		in, out := &in.Ipv6IpamPoolID, &out.Ipv6IpamPoolID
+		*out = new(string)
+		**out = **in
+	}
 	if in.EnableDNSSupport != nil {
 		in, out := &in.EnableDNSSupport, &out.EnableDNSSupport
 		*out = new(bool)

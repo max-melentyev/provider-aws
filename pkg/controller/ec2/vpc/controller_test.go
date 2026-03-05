@@ -42,6 +42,8 @@ var (
 	cidr           = "192.168.0.0/32"
 	tenancyDefault = "default"
 	enableDNS      = true
+	ipv6IpamPoolID = "ipam-pool-037006c8caba5548c"
+	ipv6CidrBlock  = "2604:2be0:bf::/56"
 
 	errBoom = errors.New("boom")
 )
@@ -260,6 +262,40 @@ func TestCreate(t *testing.T) {
 				cr: vpc(withExternalName(vpcID),
 					withSpec(v1beta1.VPCParameters{
 						EnableDNSSupport: &enableDNS,
+					})),
+				result: managed.ExternalCreation{},
+			},
+		},
+		"SuccessfulWithIpv6IpamPool": {
+			args: args{
+				vpc: &fake.MockVPCClient{
+					MockCreate: func(ctx context.Context, input *awsec2.CreateVpcInput, opts []func(*awsec2.Options)) (*awsec2.CreateVpcOutput, error) {
+						if aws.ToString(input.Ipv6IpamPoolId) != ipv6IpamPoolID {
+							t.Errorf("expected Ipv6IpamPoolId %q, got %q", ipv6IpamPoolID, aws.ToString(input.Ipv6IpamPoolId))
+						}
+						if aws.ToString(input.Ipv6CidrBlock) != ipv6CidrBlock {
+							t.Errorf("expected Ipv6CidrBlock %q, got %q", ipv6CidrBlock, aws.ToString(input.Ipv6CidrBlock))
+						}
+						return &awsec2.CreateVpcOutput{
+							Vpc: &awsec2types.Vpc{
+								VpcId:     aws.String(vpcID),
+								CidrBlock: aws.String(cidr),
+							},
+						}, nil
+					},
+				},
+				cr: vpc(withSpec(v1beta1.VPCParameters{
+					CIDRBlock:      cidr,
+					Ipv6IpamPoolID: aws.String(ipv6IpamPoolID),
+					Ipv6CIDRBlock:  aws.String(ipv6CidrBlock),
+				})),
+			},
+			want: want{
+				cr: vpc(withExternalName(vpcID),
+					withSpec(v1beta1.VPCParameters{
+						CIDRBlock:      cidr,
+						Ipv6IpamPoolID: aws.String(ipv6IpamPoolID),
+						Ipv6CIDRBlock:  aws.String(ipv6CidrBlock),
 					})),
 				result: managed.ExternalCreation{},
 			},

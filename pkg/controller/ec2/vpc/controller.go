@@ -215,6 +215,7 @@ func (e *external) Create(ctx context.Context, mgd resource.Managed) (managed.Ex
 		Ipv6CidrBlock:               cr.Spec.ForProvider.Ipv6CIDRBlock,
 		AmazonProvidedIpv6CidrBlock: cr.Spec.ForProvider.AmazonProvidedIpv6CIDRBlock,
 		Ipv6Pool:                    cr.Spec.ForProvider.Ipv6Pool,
+		Ipv6IpamPoolId:              cr.Spec.ForProvider.Ipv6IpamPoolID,
 		InstanceTenancy:             awsec2types.Tenancy(aws.ToString(cr.Spec.ForProvider.InstanceTenancy)),
 	})
 	if err != nil {

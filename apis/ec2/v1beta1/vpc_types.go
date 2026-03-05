@@ -99,6 +99,12 @@ type VPCParameters struct {
 	// +immutable
 	Ipv6Pool *string `json:"ipv6Pool,omitempty"`
 
+	// The ID of an IPv6 IPAM pool to allocate the VPC's IPv6 CIDR from.
+	// Mutually exclusive with Ipv6Pool.
+	// +optional
+	// +immutable
+	Ipv6IpamPoolID *string `json:"ipv6IpamPoolId,omitempty"`
+
 	// A boolean flag to enable/disable DNS support in the VPC
 	// +optional
 	EnableDNSSupport *bool `json:"enableDnsSupport,omitempty"`

@@ -7,6 +7,7 @@
 - Pass Spec.Tags in TagSpecifications when creating ec2.Instance and ec2.SecurityGroup
 - Trigger reconciliation when ec2.Instance tags are changed
 - Change Update logic for ec2.Instance
+- Added IPv6 VPCIPAM support
 
 ### Publishing new build
 

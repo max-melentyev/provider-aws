@@ -114,6 +114,11 @@ spec:
                       in the request. To let Amazon choose the IPv6 CIDR block for you, omit this
                       parameter.
                     type: string
+                  ipv6IpamPoolId:
+                    description: |-
+                      The ID of an IPv6 IPAM pool to allocate the VPC's IPv6 CIDR from.
+                      Mutually exclusive with Ipv6Pool.
+                    type: string
                   ipv6Pool:
                     description: The ID of an IPv6 address pool from which to allocate
                       the IPv6 CIDR block.
