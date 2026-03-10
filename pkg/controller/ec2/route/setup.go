@@ -132,8 +132,10 @@ func (e *external) findRouteByDestination(ctx context.Context, cr *svcapitypes.R
 			if ec2.CIDRBlocksEqual(pointer.StringValue(route.DestinationCidrBlock), pointer.StringValue(cr.Spec.ForProvider.DestinationCIDRBlock)) {
 				return route, nil
 			}
+			if ec2.CIDRBlocksEqual(pointer.StringValue(route.DestinationIpv6CidrBlock), pointer.StringValue(cr.Spec.ForProvider.DestinationIPv6CIDRBlock)) {
+				return route, nil
+			}
 		}
-
 	}
 	return nil, errors.New(errUnexpectedObject)
 }
