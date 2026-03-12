@@ -20,6 +20,9 @@ const (
 
 	// InvalidPermissionDuplicate is returned when you try to Authorize for a rule that already exists.
 	InvalidPermissionDuplicate = "InvalidPermission.Duplicate"
+
+	// InvalidPermissionNotFound is returned when you try to Revoke a rule that doesn't exist.
+	InvalidPermissionNotFound = "InvalidPermission.NotFound"
 )
 
 // SecurityGroupClient is the external client used for SecurityGroup Custom Resource
@@ -51,6 +54,12 @@ func IsSecurityGroupNotFoundErr(err error) bool {
 func IsRuleAlreadyExistsErr(err error) bool {
 	var awsErr smithy.APIError
 	return errors.As(err, &awsErr) && awsErr.ErrorCode() == InvalidPermissionDuplicate
+}
+
+// IsRuleNotFoundErr returns true if the error is because the rule doesn't exist.
+func IsRuleNotFoundErr(err error) bool {
+	var awsErr smithy.APIError
+	return errors.As(err, &awsErr) && awsErr.ErrorCode() == InvalidPermissionNotFound
 }
 
 // GenerateEC2Permissions converts object Permissions to ec2 format

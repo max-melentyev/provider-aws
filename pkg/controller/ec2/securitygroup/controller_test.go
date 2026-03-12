@@ -23,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	awsec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/document"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
@@ -634,6 +635,127 @@ func TestCreate(t *testing.T) {
 					MockRevokeEgress: func(ctx context.Context, input *awsec2.RevokeSecurityGroupEgressInput, opts []func(*awsec2.Options)) (*awsec2.RevokeSecurityGroupEgressOutput, error) {
 						return nil, errBoom
 					},
+				},
+				cr: sg(),
+			},
+			want: want{
+				err: errorutils.Wrap(errBoom, errRevokeEgress),
+				cr: sg(withExternalName(sgID),
+					withConditions(xpv1.Creating())),
+			},
+		},
+		"SuccessfulRevokesIPv4AndIPv6Defaults": {
+			args: args{
+				kube: &test.MockClient{
+					MockGet:          test.NewMockGetFn(nil),
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+				},
+				sg: &fake.MockSecurityGroupClient{
+					MockCreate: func(ctx context.Context, input *awsec2.CreateSecurityGroupInput, opts []func(*awsec2.Options)) (*awsec2.CreateSecurityGroupOutput, error) {
+						return &awsec2.CreateSecurityGroupOutput{
+							GroupId: aws.String(sgID),
+						}, nil
+					},
+					MockRevokeEgress: func() func(ctx context.Context, input *awsec2.RevokeSecurityGroupEgressInput, opts []func(*awsec2.Options)) (*awsec2.RevokeSecurityGroupEgressOutput, error) {
+						callCount := 0
+						return func(ctx context.Context, input *awsec2.RevokeSecurityGroupEgressInput, opts []func(*awsec2.Options)) (*awsec2.RevokeSecurityGroupEgressOutput, error) {
+							callCount++
+							switch callCount {
+							case 1:
+								if diff := cmp.Diff(input.IpPermissions, []awsec2types.IpPermission{
+									{
+										IpProtocol: aws.String("-1"),
+										IpRanges:   []awsec2types.IpRange{{CidrIp: aws.String("0.0.0.0/0")}},
+									},
+								}, cmpopts.IgnoreTypes(document.NoSerde{})); diff != "" {
+									t.Errorf("first revoke (IPv4) args: -want, +got:\n%s", diff)
+								}
+							case 2:
+								if diff := cmp.Diff(input.IpPermissions, []awsec2types.IpPermission{
+									{
+										IpProtocol: aws.String("-1"),
+										Ipv6Ranges: []awsec2types.Ipv6Range{{CidrIpv6: aws.String("::/0")}},
+									},
+								}, cmpopts.IgnoreTypes(document.NoSerde{})); diff != "" {
+									t.Errorf("second revoke (IPv6) args: -want, +got:\n%s", diff)
+								}
+							default:
+								t.Errorf("unexpected RevokeSecurityGroupEgress call #%d", callCount)
+							}
+							t.Cleanup(func() {
+								if callCount != 2 {
+									t.Errorf("expected 2 RevokeSecurityGroupEgress calls, got %d", callCount)
+								}
+							})
+							return &awsec2.RevokeSecurityGroupEgressOutput{}, nil
+						}
+					}(),
+				},
+				cr: sg(),
+			},
+			want: want{
+				cr: sg(withExternalName(sgID),
+					withConditions(xpv1.Creating())),
+			},
+		},
+		"IPv6RevokeNotFoundIgnored": {
+			args: args{
+				kube: &test.MockClient{
+					MockGet:          test.NewMockGetFn(nil),
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+				},
+				sg: &fake.MockSecurityGroupClient{
+					MockCreate: func(ctx context.Context, input *awsec2.CreateSecurityGroupInput, opts []func(*awsec2.Options)) (*awsec2.CreateSecurityGroupOutput, error) {
+						return &awsec2.CreateSecurityGroupOutput{
+							GroupId: aws.String(sgID),
+						}, nil
+					},
+					MockRevokeEgress: func() func(ctx context.Context, input *awsec2.RevokeSecurityGroupEgressInput, opts []func(*awsec2.Options)) (*awsec2.RevokeSecurityGroupEgressOutput, error) {
+						callCount := 0
+						return func(ctx context.Context, input *awsec2.RevokeSecurityGroupEgressInput, opts []func(*awsec2.Options)) (*awsec2.RevokeSecurityGroupEgressOutput, error) {
+							callCount++
+							if callCount == 2 {
+								return nil, &smithy.GenericAPIError{
+									Code:    ec2.InvalidPermissionNotFound,
+									Message: "rule not found",
+								}
+							}
+							return &awsec2.RevokeSecurityGroupEgressOutput{}, nil
+						}
+					}(),
+				},
+				cr: sg(),
+			},
+			want: want{
+				cr: sg(withExternalName(sgID),
+					withConditions(xpv1.Creating())),
+			},
+		},
+		"IPv6RevokeOtherErrorFails": {
+			args: args{
+				kube: &test.MockClient{
+					MockGet:          test.NewMockGetFn(nil),
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+				},
+				sg: &fake.MockSecurityGroupClient{
+					MockCreate: func(ctx context.Context, input *awsec2.CreateSecurityGroupInput, opts []func(*awsec2.Options)) (*awsec2.CreateSecurityGroupOutput, error) {
+						return &awsec2.CreateSecurityGroupOutput{
+							GroupId: aws.String(sgID),
+						}, nil
+					},
+					MockRevokeEgress: func() func(ctx context.Context, input *awsec2.RevokeSecurityGroupEgressInput, opts []func(*awsec2.Options)) (*awsec2.RevokeSecurityGroupEgressOutput, error) {
+						callCount := 0
+						return func(ctx context.Context, input *awsec2.RevokeSecurityGroupEgressInput, opts []func(*awsec2.Options)) (*awsec2.RevokeSecurityGroupEgressOutput, error) {
+							callCount++
+							if callCount == 2 {
+								return nil, errBoom
+							}
+							return &awsec2.RevokeSecurityGroupEgressOutput{}, nil
+						}
+					}(),
 				},
 				cr: sg(),
 			},

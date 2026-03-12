@@ -231,6 +231,9 @@ func (e *external) Create(ctx context.Context, mgd resource.Managed) (managed.Ex
 	}
 	// NOTE(muvaf): AWS creates an initial egress rule and there is no way to
 	// disable it with the create call. So, we revoke it right after the creation.
+	// In dual-stack VPCs, AWS creates both an IPv4 (0.0.0.0/0) and an IPv6 (::/0)
+	// default egress rule. We revoke both; the IPv6 revoke is a no-op in
+	// non-dual-stack VPCs (InvalidPermission.NotFound is ignored).
 	_, err = e.sg.RevokeSecurityGroupEgress(ctx, &awsec2.RevokeSecurityGroupEgressInput{
 		GroupId: aws.String(meta.GetExternalName(cr)),
 		IpPermissions: []awsec2types.IpPermission{
@@ -240,7 +243,22 @@ func (e *external) Create(ctx context.Context, mgd resource.Managed) (managed.Ex
 			},
 		},
 	})
-	return managed.ExternalCreation{}, errorutils.Wrap(err, errRevokeEgress)
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, errRevokeEgress)
+	}
+	_, err = e.sg.RevokeSecurityGroupEgress(ctx, &awsec2.RevokeSecurityGroupEgressInput{
+		GroupId: aws.String(meta.GetExternalName(cr)),
+		IpPermissions: []awsec2types.IpPermission{
+			{
+				IpProtocol: aws.String("-1"),
+				Ipv6Ranges: []awsec2types.Ipv6Range{{CidrIpv6: aws.String("::/0")}},
+			},
+		},
+	})
+	if err != nil && !ec2.IsRuleNotFoundErr(err) {
+		return managed.ExternalCreation{}, errors.Wrap(err, errRevokeEgress)
+	}
+	return managed.ExternalCreation{}, nil
 }
 
 func (e *external) Update(ctx context.Context, mgd resource.Managed) (managed.ExternalUpdate, error) { //nolint:gocyclo
